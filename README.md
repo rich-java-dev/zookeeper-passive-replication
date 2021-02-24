@@ -1,5 +1,5 @@
-# Distributed Systems Principles - Assignment 1
-## Single Broker-Based Publish-Subscribe Using ZMQ and Mininet
+# Distributed Systems Principles - Assignment 2
+## Leader Election in Pub/Sub model with ZooKeeper
 ### Richard White, Max Coursey 
 
 ### https://youtu.be/KANdeYaW1_8
