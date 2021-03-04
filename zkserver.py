@@ -33,6 +33,8 @@ class Broker:
     def __init__(self, zkserverip, broker_address):
         self.broker_id = randint(1000, 10000) #TODO - removed uuid.uuid4() - easier to read using 4 digit random
         self.context = zmq.Context()
+        self.follower_socket = None
+        self.leader_socket = None
        
         self.broker_address = broker_address
         self.zkaddress = zkserverip + ':2181'
@@ -55,34 +57,39 @@ class Broker:
         if zk.exists('/leader'):
             print(f'Broker {self.broker_id} is a follower')
             
+            #Watch leader path for changes
             @zk.DataWatch(path='/leader')
             def watch_leader(data, state):
                 if zk.exists(path='/leader') is None:
                     election = zk.Election('/broker/', self.broker_id)
                     election.run(elect_leader) # blocks until wins or canceled
-                    
-                    crnt_leader_address = str(zk.get('/leader')[0])
-                    follower_socket = self.context.socket(zmq.PULL)
-                    #socket options?
-                    follower_socket.connect(f'tcp://{crnt_leader_address}:5559')
-                    print(f'Follower broker {self.broker_id} connected to leader {crnt_leader_address}:5559')
-# TODO - need while loop as long as not leader flag?
-                    try:
-                        recv_msg = follower_socket.recv_string()
-                    except:
-                        print("Time out error")
-                    print(f'Recv msg from leader\n{recv_msg}\n')
-#TODO - Receive mesage on leader soecket
-                    
-                else:
-                    zk.create('/leader', value=broker_address, emphemeral=True, makepath=True)
-                    while zk.exists(path='/leader') is None:
-                        pass
-                    print(f'Broker {self.broker_id} is now a leader')
-                    leader_socket = self.context.socket(zmq.PUSH)
-                    leader_socket.bind('tcp://*:5559')
-                    #if broker_socket != None:
-                    print(f'Leader broker {self.broker_id} Bound to Port 5559')
+          
+            #Create follower sock for receiving messages from leader
+            crnt_leader_address = str(zk.get('/leader')[0])
+            self.follower_socket = self.context.socket(zmq.PULL)
+            #socket options?
+            self.follower_socket.connect(f'tcp://{crnt_leader_address}:5559')
+            print(f'Follower broker {self.broker_id} connected to leader {crnt_leader_address}:5559')
+            
+            # TODO - Update to make sure only followers run this
+            while True:
+                try:
+                    recv_msg = self.follower_socket.recv_string()
+                except:
+                    print("Time out error")
+                
+                #TODO Replace with actual call to store message data
+                print(f'Recv msg from leader\n{recv_msg}\n')
+                                                        
+        else:
+            zk.create('/leader', value=broker_address, emphemeral=True, makepath=True)
+            while zk.exists(path='/leader') is None:
+                pass
+            print(f'Broker {self.broker_id} is now a leader')
+            leader_socket = self.context.socket(zmq.PUSH)
+            leader_socket.bind('tcp://*:5559')
+            #if broker_socket != None:
+            print(f'Leader broker {self.broker_id} Bound to Port 5559')
                     
 #############################################################
         def elect_leader(self):
@@ -107,3 +114,4 @@ class Broker:
                 print("Remove publishers from state")
 
 #############################################################   
+
