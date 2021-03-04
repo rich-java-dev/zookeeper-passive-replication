@@ -1,0 +1,19 @@
+---
+
+- name: Update apt-get repo and cache
+  apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+- name: Install apt packages git, mininet, pip, matplotlib
+  apt:
+    pkg:
+    - git
+    - mininet
+    - python3-pip
+    - python3-matplotlib
+
+- name: Install pip packages - wireshark
+  pip:
+    name: 
+      - wireshark
+...
+
