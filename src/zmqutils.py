@@ -3,32 +3,43 @@ from zmq.utils.monitor import recv_monitor_message
 import threading
 import time
 import netifaces as ni
-from zkutils import (
-    create, delete, get_val, set_val,
-    start_client,
-    await_sucessful_create
-)
 
 context = zmq.Context()
 
 
-def proxy(in_bound=5555, out_bound=5556):
-    ip = get_ip()
-    print(ip)
-    zk = await_sucessful_create("/proxy", ip)
+class Proxy():
 
-    # many SUB handling
-    front_end = context.socket(zmq.XSUB)
-    front_end.bind(f"tcp://*:{in_bound}")
+    def __init__(self, in_bound=5555, out_bound=5556):
+        self.in_bound = in_bound
+        self.out_bound = out_bound
+        self.path = "/proxy"
+        self.zk = None
+        self.ip = get_ip()
 
-    # many PUB handling
-    back_end = context.socket(zmq.XPUB)
-    back_end.setsockopt(zmq.XPUB_VERBOSE, 1)
-    back_end.bind(f"tcp://*:{out_bound}")
+    def start(self):
+        print(self.ip)
+        self.zk = start_kazoo_client()
 
-    print(f"Proxy started w/ in_bound={in_bound}, out_bound={out_bound}")
+        @self.zk.DataWatch(self.path)
+        def watcher(data, stat):
+            print(f"Proxy: watcher triggered. data:{data}, stat={stat}")
+            if data is None:
+                if not self.zk.exists(self.path):
+                    self.zk.create(self.path, value=self.ip.encode('utf-8'))
 
-    zmq.proxy(front_end, back_end)
+        # many SUB handling
+        front_end = context.socket(zmq.XSUB)
+        front_end.bind(f"tcp://*:{self.in_bound}")
+
+        # many PUB handling
+        back_end = context.socket(zmq.XPUB)
+        back_end.setsockopt(zmq.XPUB_VERBOSE, 1)
+        back_end.bind(f"tcp://*:{self.out_bound}")
+
+        print(
+            f"Proxy started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")
+
+        zmq.proxy(front_end, back_end)
 
 
 def publisher(interface, port=5555, bind=True, connect=False, topic_min=0, topic_max=100000):

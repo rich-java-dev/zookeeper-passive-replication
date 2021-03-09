@@ -17,7 +17,7 @@ def create(url="/test", value="hello!", intf="localhost", port="2181"):
     return zk
 
 
-def await_sucessful_create(url="/test", value="hello!", intf="127.0.0.1", port="2181"):
+def await_sucessful_create(url="/test", value="hello!", intf="10.0.0.1", port="2181"):
     zk = start_client(intf, port)
     while(zk.exists(path=url)):
         time.sleep(.250)
@@ -45,7 +45,7 @@ def get_val(url="/test", intf="localhost", port="2181"):
     return zk.get(path=url)
 
 
-def start_client(intf="localhost", port="2181"):
+def start_kazoo_client(intf="localhost", port="2181"):
     url = f'{intf}:{port}'
     print(f"starting ZK client on '{url}'")
     zk = KazooClient(hosts=url)

@@ -1,6 +1,6 @@
 import sys
 import argparse
-from zmqutils import proxy
+from zmqutils import Proxy
 
 parser = argparse.ArgumentParser("proxy.py --xin=5555 --xout=5556")
 parser.add_argument("--xin", "--in_bound", default="5555")
@@ -11,4 +11,4 @@ in_bound = args.xin
 out_bound = args.xout
 
 
-proxy(in_bound, out_bound)
+Proxy(in_bound, out_bound).start()
