@@ -9,7 +9,7 @@ import uuid
 parser = argparse.ArgumentParser()
 parser.add_argument("--port", default="5555")
 parser.add_argument("--topic", default="12345")
-parser.add_argument("--proxy", action="store_true", default=True)
+parser.add_argument("--proxy", action="store_true", default=False)
 args = parser.parse_args()
 
 port = args.port

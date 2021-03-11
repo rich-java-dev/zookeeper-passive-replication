@@ -87,7 +87,9 @@ class Publisher():
             print(f"binding: {conn_str}")
             self.socket.bind(conn_str)
 
-            self.zk.create(self.path, value=self.ip.encode('utf-8'), ephemeral=True)
+            print(f"Publisher: creating znode {self.path}:{self.ip}")
+            self.zk.create(self.path, value=self.ip.encode(
+                'utf-8'), ephemeral=True)
 
         return lambda topic, msg: self.socket.send_string(f'{topic} {msg}')
 
@@ -157,12 +159,13 @@ class Subscriber():
 
         return lambda: self.socket.recv_string()
 
-    def plot_data(self, plot_data_set, label=""):
+    def plot_data(self, data_set, label=""):
 
         # plot the time deltas
         fig, axs = plt.subplots(1)
-        axs.plot(range(len(plot_data_set)), plot_data_set, label)
-        axs.set_title(f"RTTs '{label}' - topic '{self.topic}' - host '{self.ip}'")
+        axs.plot(range(len(data_set)), data_set, label)
+        axs.set_title(
+            f"RTTs '{label}' - topic '{self.topic}' - host '{self.ip}'")
         axs.set_ylabel("Delta Time (Pub - Sub)")
         axs.set_xlabel("Number of Samples")
         plt.show()
