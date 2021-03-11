@@ -55,14 +55,14 @@ if flood_mode:
 
 else:  # with Proxy/Broker:
     # broker.py <proxy_input_port> <proxy_output_port>
-    x_intf = "10.0.0.1"  # proxy interface
-    prox_str = f'python3 {src_dir}/proxy.py &'
+    h1 = net.hosts[0]
+    prox_str = f'python3 {src_dir}/proxy.py --id={h1.IP()}&'
     print(prox_str)
-    net.hosts[0].cmd(prox_str)
+    h1.cmd(prox_str)
 
     # pub.py <proxy_interface> <interface_port (proxy subscrib port)> <publisher_range_min> <publisher_range_max>
     for i in range(0, pub_count):
-        cmd_str = f'python3 {src_dir}/publisher.py --connect --interface={x_intf} --topic_range {int(i*topic_size)} {int((i+1)*topic_size)} &'
+        cmd_str = f'python3 {src_dir}/publisher.py --connect --topic_range {int(i*topic_size)} {int((i+1)*topic_size)} &'
         print(cmd_str)
         net.hosts[i+1].cmd(cmd_str)
 

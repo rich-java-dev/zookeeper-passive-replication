@@ -1,6 +1,5 @@
 import pyshark
 import argparse
-from multiprocessing import Pool
 import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser()
