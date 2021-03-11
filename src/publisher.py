@@ -1,34 +1,27 @@
 import sys
 from random import randrange
 import argparse
-from zmqutils import publisher
+from zutils import Publisher
 import time
 import uuid
 
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--interface", "--proxy",
-                    "--device", nargs="+", default="*")
 parser.add_argument("--port", default="5555")
-parser.add_argument("--topic_range", nargs="+")
-parser.add_argument("--topic", default="23456")
-parser.add_argument("--bind", action="store_true", default=False)
-parser.add_argument("--connect", action="store_true", default=False)
+parser.add_argument("--topic", default="12345")
+parser.add_argument("--proxy", action="store_true", default=True)
 args = parser.parse_args()
 
-intf = args.interface
 port = args.port
-bind = args.bind
-connect = args.connect
+use_proxy = args.proxy
 topic = args.topic
-topic_min = args.topic_range[0] if args.topic_range else topic
-topic_max = args.topic_range[1] if args.topic_range else topic
 
 pub_id = uuid.uuid4()
 
-publish = publisher(intf, port, bind, connect, topic_min, topic_max)
+publish = Publisher(port, topic, use_proxy).start()
 
 while True:
-    zipcode = randrange(int(topic_min), int(topic_max))
+    zipcode = topic
     temperature = randrange(-80, 135)
     relhumidity = randrange(10, 60)
     sent_time = time.time()

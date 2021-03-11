@@ -1,18 +1,16 @@
 import sys
 import time
 import argparse
-from zmqutils import subscriber
+from zutils import Subscriber
 import datetime
 import matplotlib.pyplot as plt
 import uuid
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--interface", "--proxy",
-                    "--device", nargs="+", default="*")
+parser.add_argument("--proxy", action="store_true", default=True)
 parser.add_argument("--port", default="5556")
 parser.add_argument("--topic", default="")
-parser.add_argument("--net_size", default=0)
 parser.add_argument("--sample_size", "--samples", default=50)
 parser.add_argument("--host", default="")
 parser.add_argument("--label", default="default")
@@ -29,7 +27,7 @@ sub_id = uuid.uuid4()
 host = args.host
 
 # mxm - returns topic temp humid timestamp
-notify = subscriber(intf, port, topic, net_size)
+notify = Subscriber(intf, port, topic,).start()
 
 delta_time_set = []
 while len(delta_time_set) < sample_size:
