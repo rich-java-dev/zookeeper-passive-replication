@@ -13,12 +13,12 @@ parser.add_argument("--proxy", action="store_true", default=True)
 args = parser.parse_args()
 
 port = args.port
-use_proxy = args.proxy
+proxy = args.proxy
 topic = args.topic
 
 pub_id = uuid.uuid4()
 
-publish = Publisher(port, topic, use_proxy).start()
+publish = Publisher(port, topic, proxy).start()
 
 while True:
     zipcode = topic

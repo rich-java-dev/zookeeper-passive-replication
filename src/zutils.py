@@ -53,7 +53,6 @@ class Proxy():
 class Publisher():
 
     def __init__(self, port=5555, topic=12345, proxy=True):
-        self.interface = interface
         self.port = port
         self.proxy = proxy
         self.topic = topic
@@ -78,7 +77,7 @@ class Publisher():
             def proxy_watcher(data, stat):
                 print(f"Publisher: proxy watcher triggered. data:{data}")
                 if data is not None:
-                    intf = data
+                    intf = data.decode('utf-8')
                     conn_str = f'tcp://{intf}:{self.port}'
                     print(f"connecting: {conn_str}")
                     self.socket.connect(conn_str)
@@ -88,8 +87,7 @@ class Publisher():
             print(f"binding: {conn_str}")
             self.socket.bind(conn_str)
 
-            self.zk.create(self.path, value=self.ip.encode(
-                'utf-8'), ephemeral=True)
+            self.zk.create(self.path, value=self.ip.encode('utf-8'), ephemeral=True)
 
         return lambda topic, msg: self.socket.send_string(f'{topic} {msg}')
 
@@ -112,7 +110,7 @@ class Publisher():
             print()
             print('event monitor stopped.')
 
-        monitor = socket.get_monitor_socket()
+        monitor = self.socket.get_monitor_socket()
 
         t = threading.Thread(target=evt_monitor, args=(monitor,))
         t.start()
@@ -128,6 +126,7 @@ class Subscriber():
         self.proxy = proxy
         self.ip = get_ip()
         self.socket = context.socket(zmq.SUB)
+        self.zk = start_kazoo_client()
 
     def start(self):
         print(f"Subscriber: {self.ip}")
@@ -138,7 +137,7 @@ class Subscriber():
             def proxy_watcher(data, stat):
                 print(f"Subscriber: proxy watcher triggered. data:{data}")
                 if data is not None:
-                    intf = data
+                    intf = data.decode('utf-8')
                     conn_str = f'tcp://{intf}:{self.port}'
                     print(f"connecting: {conn_str}")
                     self.socket.connect(conn_str)
@@ -149,7 +148,7 @@ class Subscriber():
             def pub_watcher(data, stat):
                 print(f"Publisher: topic watcher triggered. data:{data}")
                 if data is not None:
-                    intf = data
+                    intf = data.decode('utf-8')
                     conn_str = f'tcp://{intf}:{self.port}'
                     print(f"connecting: {conn_str}")
                     self.socket.connect(conn_str)
@@ -158,13 +157,12 @@ class Subscriber():
 
         return lambda: self.socket.recv_string()
 
-    def plot_data(self, plot_data_set):
-        print(f'testing - {pub_id} {sub_id} {topic} {temp} {humid} {delta}\n')
+    def plot_data(self, plot_data_set, label=""):
 
         # plot the time deltas
         fig, axs = plt.subplots(1)
-        axs.plot(range(len(plot_data_set)), plot_data_set)
-        axs.set_title(f"RTTs '{label}' - topic '{topic}' - host '{host}'")
+        axs.plot(range(len(plot_data_set)), plot_data_set, label)
+        axs.set_title(f"RTTs '{label}' - topic '{self.topic}' - host '{self.ip}'")
         axs.set_ylabel("Delta Time (Pub - Sub)")
         axs.set_xlabel("Number of Samples")
         plt.show()
@@ -176,7 +174,7 @@ def get_ip():
     return ni.ifaddresses(intf_name)[ni.AF_INET][0]['addr']
 
 
-def start_kazoo_client(intf="localhost", port="2181"):
+def start_kazoo_client(intf="10.0.0.1", port="2181"):
     url = f'{intf}:{port}'
     print(f"starting ZK client on '{url}'")
     zk = KazooClient(hosts=url)
