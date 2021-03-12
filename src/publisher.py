@@ -28,4 +28,4 @@ while True:
     msg = f'{pub_id} {temperature} {relhumidity} {sent_time}'
 
     publish(zipcode, msg)
-    # time.sleep(0.00000001)
+    time.sleep(0.0001)

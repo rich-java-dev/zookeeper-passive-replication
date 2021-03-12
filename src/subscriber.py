@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--proxy", action="store_true", default=False)
 parser.add_argument("--port", default="5556")
 parser.add_argument("--topic", default="12345")
-parser.add_argument("--sample_size", "--samples", default=500)
+parser.add_argument("--sample_size", "--samples", default=5000)
 parser.add_argument("--label", default="default")
 args = parser.parse_args()
 
