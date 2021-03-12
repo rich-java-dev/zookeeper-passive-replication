@@ -33,14 +33,15 @@ class Proxy():
         self.context = zmq.Context()
 
     def start(self):
-        print(f"Proxy: {self.ip}")
+        print("\n*****Broker Startup*****")
+        print(f" - Broker {self.ip} IP: {self.ip}")
         
         ##Create broker znode for each instance of Proxy class
         if self.zk.exists(self.brokerpath) is None:
             self.zk.create(self.brokerpath, value=b'', ephemeral=False, makepath=True)
         broker_path = self.brokerpath + '/' + self.id
         self.zk.create(path=broker_path, value=b'', ephemeral=True, makepath=True)
-        print(f'Broker {self.id} znode created under /broker')
+        print(f' - Broker znode created: /broker/{self.id}')
 
         
 
@@ -48,7 +49,7 @@ class Proxy():
         
         ##Make broker follower if leader exists
         if self.zk.exists(self.path):
-            print(f'Broker {self.id} is a follower')   
+            print(f' - Broker {self.id} status: Follower')   
             ##Flag used to differentiate recieve message and state replication funcs
             self.isleader = False
             self.watch_leader()
@@ -56,14 +57,16 @@ class Proxy():
            
             ##get leader znode tuple value (value=self.ip_encode, znodestat)
             leader_ip = (self.zk.get(self.path)[0]).decode('utf-8')
-            print(f'Leader IP - {leader_ip}')
+            print(f' - Broker {self.id} following leader IP : {leader_ip}')
             ##make node cluster socket to update each node's local state (push for leader, pull for follower)
             
             context = zmq.Context()
             self.clustersocket = context.socket(zmq.PULL)
             #self.clustersocket.setsockopt(zmq.RCVTIMEO, 30000)
             self.clustersocket.connect(f'tcp://{leader_ip}:5559')
-            print(f'Follower broker {self.id} connected to cluster PULL from {leader_ip}:5559') 
+            print(f' - Broker {self.id} cluster socket address: {leader_ip}:5559') 
+            print(f' - Broker {self.id} cluster socket type: PULL') 
+            
             
             while self.isleader is False:
                 try:
@@ -80,14 +83,15 @@ class Proxy():
                         'utf-8'), ephemeral=True, makepath=True)
             while self.zk.exists(self.path) is None:
                 pass
-            print(f'Broker {self.id} is now a leader')
+            print(f' - Broker {self.id} status: Leader')
             ##Flag used to differentiate recieve message and state replication funcs
             self.isleader = True
             ##make node cluster socket to update each node's local state (push for leader, pull for follower)
             self.clustersocket = self.context.socket(zmq.PUSH)
             self.clustersocket.bind('tcp://*:5559')
             ##TODO - check if we need a sleep or recursive timeout function to allow time to setup socket
-            print(f'Leader broker {self.id} Bound to Port 5559')
+            print(f' - Broker {self.id} cluster socket address: *:5559') 
+            print(f' - Broker {self.id} cluster socket type: PUSH') 
 
             ##Set up xpub/xsub sockets            
             # many SUB handling
@@ -98,7 +102,7 @@ class Proxy():
             back_end.setsockopt(zmq.XPUB_VERBOSE, 1)
             back_end.bind(f"tcp://*:{self.out_bound}")            
             print(
-                f"Proxy started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")            
+                f"Broker {self.id}is leader - started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")            
             zmq.proxy(front_end, back_end)
             
         cluster_thread = threading.Thread(target=self.replicate_data_to_followers, args=())
@@ -109,7 +113,8 @@ class Proxy():
         ##Watch leader node for changes - call proxy_watcher on each change
         @self.zk.DataWatch(path=self.path)
         def proxy_watcher(data, stat):
-            print(f"Proxy: watcher triggered. data:{data}, stat={stat}")
+            print(f" - Leader watcher triggered:\n\
+                  data:{data}, stat={stat}\n")
             if self.zk.exists(path=self.path) is None:
             #if data is None:
                 ##if no leader znode - run Kazoo election recipe
@@ -118,20 +123,21 @@ class Proxy():
                 election.run(self.elect_leader) # blocks until wins or canceled
                 
     def elect_leader(self): 
-        print("running elect leader")
+        print(" - Electing Leader")
         if self.zk.exists(self.path) is None:
             self.zk.create(self.path, value=self.ip.encode(
                     'utf-8'), ephemeral=True, makepath=True)   
             while self.zk.exists(self.path) is None:
                 pass
-            print(f'Broker {self.id} is the leader')
+            print(f' - Broker {self.id} status: Leader')
             ##Flag used to differentiate recieve message and state replication funcs
             self.isleader = True
             context = zmq.Context()
             self.clustersocket = context.socket(zmq.PUSH)
             self.clustersocket.bind('tcp://*:5559')
             #if broker_socket != None:
-            print(f'Leader broker {self.id} Bound to Cluster Socket PUSH to Port 5559')
+            print(f' - Broker {self.id} cluster socket type: PUSH')
+            print(f' - Broker {self.id} cluster socket address: tcp://*:5559')
         
             ##Set up xpub/xsub sockets
             # many SUB handling
@@ -142,7 +148,7 @@ class Proxy():
             back_end.setsockopt(zmq.XPUB_VERBOSE, 1)
             back_end.bind(f"tcp://*:{self.out_bound}")            
             print(
-                f"Proxy started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")            
+                f"Broker {self.id} leader: in_bound={self.in_bound}, out_bound={self.out_bound}")            
             zmq.proxy(front_end, back_end)
             
     def replicate_data_to_followers(self):
@@ -285,13 +291,14 @@ class Subscriber():
 ##############################################################################
 def get_ip():
     intf_name = ni.interfaces()[1]
-    print(f'interface: {intf_name}')
+    print("*****STARTING UP*****")
+    print(f'Interface: {intf_name}')
     return ni.ifaddresses(intf_name)[ni.AF_INET][0]['addr']
 
 
 def start_kazoo_client(intf="10.0.0.1", port="2181"):
     url = f'{intf}:{port}'
-    print(f"starting ZK client on '{url}'")
+    print(f"Zookeeper Client Started: '{url}'")
     zk = KazooClient(hosts=url)
     zk.start()
     return zk
