@@ -17,12 +17,12 @@ context = zmq.Context()
 
 class Proxy():
 
-    def __init__(self, in_bound=5555, out_bound=5556):
+    def __init__(self, zkserver="10.0.0.1", in_bound=5555, out_bound=5556):
         self.in_bound = in_bound
         self.out_bound = out_bound
         self.path = "/proxy"
         self.ip = get_ip()
-        self.zk = start_kazoo_client()
+        self.zk = start_kazoo_client(zkserver)
 
     def start(self):
         print(f"Proxy: {self.ip}")
@@ -52,13 +52,13 @@ class Proxy():
 
 class Publisher():
 
-    def __init__(self, port=5555, topic=12345, proxy=True):
+    def __init__(self, port=5555, zkserver="10.0.0.1", topic=12345, proxy=True):
         self.port = port
         self.proxy = proxy
         self.topic = topic
         self.path = f"/topic/{topic}"
         self.proxy_path = "/proxy"
-        self.zk = start_kazoo_client()
+        self.zk = start_kazoo_client(zkserver)
         self.ip = get_ip()
         self.socket = context.socket(zmq.PUB)
 
@@ -120,7 +120,7 @@ class Publisher():
 
 class Subscriber():
 
-    def __init__(self, port=5556, topic='12345', proxy=True):
+    def __init__(self, port=5556, zkserver="10.0.0.1", topic='12345', proxy=True):
         self.port = port
         self.topic = topic
         self.proxy_path = "/proxy"
@@ -128,7 +128,7 @@ class Subscriber():
         self.proxy = proxy
         self.ip = get_ip()
         self.socket = context.socket(zmq.SUB)
-        self.zk = start_kazoo_client()
+        self.zk = start_kazoo_client(zkserver)
 
     def start(self):
         print(f"Subscriber: {self.ip}")
