@@ -61,13 +61,9 @@ class Proxy():
             
             context = zmq.Context()
             self.clustersocket = context.socket(zmq.PULL)
-            self.clustersocket.setsockopt(zmq.RCVTIMEO, 30000)
-            print(f'LEADER IP: {leader_ip}')
+            #self.clustersocket.setsockopt(zmq.RCVTIMEO, 30000)
             self.clustersocket.connect(f'tcp://{leader_ip}:5559')
-            if self.clustersocket != None:
-                print('follower: syncsocket ok')
-            print("*********PLACEHOLDER*********")
-            print(f'Follower broker {self.id} connected to leader {leader_ip}:5559') 
+            print(f'Follower broker {self.id} connected to cluster PULL from {leader_ip}:5559') 
             
             while self.isleader is False:
                 try:
@@ -75,7 +71,7 @@ class Proxy():
                     print('Follower recv state from leader')
                     print(msg) 
                 except Exception as e:
-                    print(f'Error from follower receive string:\n {e}')
+                    print(f'Timeout PULLing from leader:\n {e}')
                     continue
             
         ##Make leader if no leader znode already exists
@@ -104,7 +100,10 @@ class Proxy():
             print(
                 f"Proxy started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")            
             zmq.proxy(front_end, back_end)
-
+            
+        cluster_thread = threading.Thread(target=self.replicate_data_to_followers, args=())
+        threading.Thread.setDaemon(cluster_thread, True)
+        cluster_thread.start()
 
     def watch_leader(self):
         ##Watch leader node for changes - call proxy_watcher on each change
@@ -132,7 +131,7 @@ class Proxy():
             self.clustersocket = context.socket(zmq.PUSH)
             self.clustersocket.bind('tcp://*:5559')
             #if broker_socket != None:
-            print(f'Leader broker {self.id} Bound to Port 5559')
+            print(f'Leader broker {self.id} Bound to Cluster Socket PUSH to Port 5559')
         
             ##Set up xpub/xsub sockets
             # many SUB handling
@@ -145,6 +144,14 @@ class Proxy():
             print(
                 f"Proxy started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")            
             zmq.proxy(front_end, back_end)
+            
+    def replicate_data_to_followers(self):
+        #receive publisher meta data
+        while self.isleader is True:
+            self.clustersocket.send_string("Cluster comm working")
+            print("cluster socket working")
+            time.sleep(5)
+            
 
 ##############################################################################
 ## PUBLISHER CLASS
@@ -242,9 +249,8 @@ class Subscriber():
                 if data is not None:
                     intf = data.decode('utf-8')
                     conn_str = f'tcp://{intf}:{self.port}'
-                    print(f"connecting: {conn_str}")
                     self.socket.connect(conn_str)
-
+                    print(f"connected: {conn_str}")
         else:  # FLOOD MODE
 
             @self.zk.DataWatch(self.path)
@@ -257,6 +263,7 @@ class Subscriber():
                     self.socket.connect(conn_str)
 
         self.socket.setsockopt_string(zmq.SUBSCRIBE, self.topic)
+        print("sub subscribe setup")
 
         return lambda: self.socket.recv_string()
 
