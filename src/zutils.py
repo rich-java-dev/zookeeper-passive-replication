@@ -163,7 +163,7 @@ class Subscriber():
 
         # plot the time deltas
         fig, axs = plt.subplots(1)
-        axs.plot(range(len(data_set)), data_set, label)
+        axs.plot(range(len(data_set)), data_set)
         axs.set_title(
             f"RTTs '{label}' - topic '{self.topic}' - host '{self.ip}'")
         axs.set_ylabel("Delta Time (Pub - Sub)")

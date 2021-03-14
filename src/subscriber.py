@@ -8,10 +8,10 @@ import uuid
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--proxy", action="store_true", default=False)
-parser.add_argument("--zkserver","--zkintf", default="10.0.0.1")
+parser.add_argument("--zkserver", "--zkintf", default="10.0.0.1")
 parser.add_argument("--port", default="5556")
 parser.add_argument("--topic", default="12345")
-parser.add_argument("--sample_size", "--samples", default=5000)
+parser.add_argument("--sample_size", "--samples", default=100)
 parser.add_argument("--label", default="default")
 args = parser.parse_args()
 
@@ -44,4 +44,4 @@ while len(plot_data_set) < sample_size:
         session_data.write(
             f'{pub_id} {sub_id} {topic} {temp} {humid} {delta}\n')
 
-subscriber.plot_data(plot_data_set)
+subscriber.plot_data(plot_data_set, label)

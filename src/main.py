@@ -8,70 +8,100 @@ import argparse
 
 # sudo python3 main.py --flood_mode=False --pub_count=5 --sub_count=10
 parser = argparse.ArgumentParser()
-parser.add_argument("--flood_mode", action="store_true", default=False)
+parser.add_argument("--zkserver", "--zkintf", default="10.0.0.1")
+parser.add_argument("--zkpath", "--zk_bin_path",
+                    default="/home/rw/zookeeper/bin")
+parser.add_argument("--proxy_mode", action="store_true", default=False)
 parser.add_argument("--xin", default="5555")  # for use with broker
 parser.add_argument("--xout", default="5556")  # for use with broker
-parser.add_argument("--topic", default="")
-parser.add_argument("--pub_count", default=3)
-parser.add_argument("--sub_count", default=7)
-
+parser.add_argument("--pub_count", default=5)
+parser.add_argument("--proxy_count", default=3)
 args = parser.parse_args()
-pub_count = int(args.pub_count)
-sub_count = int(args.sub_count)  # mxm - added sub count for labeling
-flood_mode = args.flood_mode
-host_count = pub_count + sub_count if flood_mode else pub_count + sub_count + 1
-print(f'hostcount: {host_count}')
 
+# gets reference to directory of this project to launch scripts
 src_dir = pathlib.Path(__file__).parent.absolute()
 
+# zookeeper params: need to know where zookeeper is running/installed
+zkserver = args.zkserver  # IP of host running Zookeeper
+zkpath = args.zkpath  # try to start zookeeper server inside mininet
+
+# run configuration and network size
+proxy_mode = args.proxy_mode
+proxy_count = args.proxy_count
+pub_count = int(args.pub_count)
+
+# total net size: +1 indicates host for zookeeper server to start on
+host_count = 1 + 2 * pub_count
+if proxy_mode:
+    host_count = host_count + proxy_count
+print(f'host count: {host_count}')
+
+# mininet specific set-up
 net_topo = LinearTopo(k=host_count)  # feel free to run with other topos
-net = Mininet(topo=net_topo)  # create a 10 host net
+net = Mininet(topo=net_topo)  # create the Mininet network w/ given topo and size
 net.start()
 
-
+# ports used by the proxy for listening and broadcasting
 xin = args.xin  # proxy input (pub connection)
 xout = args.xout  # proxy output (sub connection)
 
+# print label for the graphs
+label = f'proxy_pub_sub{pub_count}' if proxy_mode else f'flood_pub_sub{pub_count}'
+print(label)
+
 # set up publishers
-topic_size = 1e5 / pub_count
 
+# generate some random topics
+pub_topics = [randrange(1e4, 1e5) for x in range(pub_count)]
 
-mLabel = f'flood_pub{pub_count}_sub{sub_count}' if flood_mode else f'centralized_pub{pub_count}_sub{sub_count}'
-print(mLabel)
+print("Random Topics for this run:")
+print(pub_topics)
 
-if flood_mode:
-    # pub.py <proxy_interface> <interface_port (proxy subscrib port)> <publisher_range_min> <publisher_range_max>
-    for i in range(0, pub_count):
-        cmd_str = f'python3 {src_dir}/publisher.py --bind --port={xin} --topic_range {int(i*topic_size)} {int((i+1)*topic_size)} &'
+print("Starting zookeeper server on host 0 (10.0.0.1)")
+zk_script = f'{zkpath}/zkServer.sh start &'
+print(zk_script)
+net.hosts[0].cmd(zk_script)
+
+#Give zookeeper a few seconds to start before running components which need zk up
+time.sleep(2)
+
+if proxy_mode:  # PROXY MODE
+
+    for i in range(0, proxy_count):  # run proxies
+        host_idx = 1 + i
+        cmd_str = f'python3 {src_dir}/proxy.py &'
         print(cmd_str)
-        net.hosts[i].cmd(cmd_str)
+        net.hosts[host_idx].cmd(cmd_str)
 
-    # sub.py <proxy_interface> <interface_port (proxy publish port)> <topic>
-    for i in range(pub_count, pub_count + sub_count):
-        topic = randrange(1e4, 1e5)
-        cmd_str = f'python3 {src_dir}/subscriber.py --net_size={host_count} --port={xin} --topic={topic} --label={mLabel} --host=h{i+1} &'
+    for i in range(0, pub_count):  # run publishers
+        topic = pub_topics[i]
+        host_idx = 1 + proxy_count + i
+        cmd_str = f'python3 {src_dir}/publisher.py --zkserver={zkserver} --port={xin} --topic {int(topic)} &'
         print(cmd_str)
-        net.hosts[i].cmd(cmd_str)
+        net.hosts[host_idx].cmd(cmd_str)
 
-else:  # with Proxy/Broker:
-    # broker.py <proxy_input_port> <proxy_output_port>
-    h1 = net.hosts[0]
-    prox_str = f'python3 {src_dir}/proxy.py --id={h1.IP()}&'
-    print(prox_str)
-    h1.cmd(prox_str)
-
-    # pub.py <proxy_interface> <interface_port (proxy subscrib port)> <publisher_range_min> <publisher_range_max>
-    for i in range(0, pub_count):
-        cmd_str = f'python3 {src_dir}/publisher.py --connect --topic_range {int(i*topic_size)} {int((i+1)*topic_size)} &'
+    for i in range(0, pub_count):  # run subscribers
+        topic = pub_topics[i]
+        host_idx = 1 + pub_count + i
+        cmd_str = f'python3 {src_dir}/subscriber.py --zkserver={zkserver} --port={xin} --topic {topic} --label={label} &'
         print(cmd_str)
-        net.hosts[i+1].cmd(cmd_str)
+        net.hosts[host_idx].cmd(cmd_str)
 
-    # sub.py <proxy_interface> <interface_port (proxy publish port)> <topic>
-    for i in range(pub_count, pub_count + sub_count + 1):
-        topic = randrange(1e4, 1e5)
-        cmd_str = f'python3 {src_dir}/subscriber.py --interface={x_intf} --port={xout} --topic={topic} --label={mLabel} --host=h{i+1} &'
+else:  # FLOOD MODE/NO PROXIES
+
+    for i in range(0, pub_count):  # run publishers
+        topic = pub_topics[i]
+        host_idx = 1 + i
+        cmd_str = f'python3 {src_dir}/publisher.py --zkserver={zkserver} --port={xin} --topic {int(topic)} &'
         print(cmd_str)
-        net.hosts[i].cmd(cmd_str)
+        net.hosts[host_idx].cmd(cmd_str)
+
+    for i in range(0, pub_count):  # run subscribers
+        topic = pub_topics[i]
+        host_idx = 1 + pub_count + i
+        cmd_str = f'python3 {src_dir}/subscriber.py --zkserver={zkserver} --port={xin} --topic {topic} --label={label} &'
+        print(cmd_str)
+        net.hosts[host_idx].cmd(cmd_str)
 
 while(True):
     time.sleep(0.001)
