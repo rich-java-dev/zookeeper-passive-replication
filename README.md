@@ -57,13 +57,14 @@ For flooding:
  >sudo python3 main.py --zkpath='/path/to/zkserver/bin' --pub_count=10
 
 ## **Running mininet and commands manually in xterm windows**
- > sudo mn -x --topo=linear,10
- > **host1**: /path/to/zookeeper/bin/zkServer.sh start
- > **host2**: python3 proxy.py --zkserver={ip if not host1, else ommit}
- > **host3**: python3 proxy.py --zkserver={ip if not host1, else ommit}
- > **host4**: python3 proxy.py --zkserver={ip if not host1, else ommit}
- > **host5**: python3 publisher.py --proxy --zkserver={ip if not host1, else ommit}
- > **host6**: python3 subscriber.py --proxy --samples=10000 --zkserver={ip if not host1, else ommit}
+>
+ - sudo mn -x --topo=linear,10
+ - **host1**: /path/to/zookeeper/bin/zkServer.sh start
+ - **host2**: python3 proxy.py --zkserver={ip if not host1, else ommit}
+ - **host3**: python3 proxy.py --zkserver={ip if not host1, else ommit}
+ - **host4**: python3 proxy.py --zkserver={ip if not host1, else ommit}
+ - **host5**: python3 publisher.py --proxy --zkserver={ip if not host1, else ommit}
+ - **host6**: python3 subscriber.py --proxy --samples=10000 --zkserver={ip if not host1, else ommit}
 
 - Once the Subscriber begins receiving messages, kill host2
 - Host3 will be elected leader, and after a few seconds the subscriber will begin receiving connections via the new proxy
