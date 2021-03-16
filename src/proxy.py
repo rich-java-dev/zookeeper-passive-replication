@@ -1,6 +1,6 @@
 import sys
 import argparse
-from zutils_mxm import Proxy
+from zutils_seq import Proxy
 
 parser = argparse.ArgumentParser("proxy.py --xin=5555 --xout=5556")
 parser.add_argument("--xin", "--in_bound", default="5555")

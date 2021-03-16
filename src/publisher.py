@@ -1,7 +1,7 @@
 import sys
 from random import randrange
 import argparse
-from zutils import Publisher
+from zutils_seq import Publisher
 import time
 import uuid
 
