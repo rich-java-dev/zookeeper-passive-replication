@@ -1,12 +1,13 @@
 # Distributed Systems Principles - Assignment 2
-## Leader Election in Pub/Sub model with ZooKeeper
+## Pub/Sub Distributed Message Queue with Leader Election/Zookeeper
 ### Richard White, Max Coursey 
 
 
-PUB/SUB model supported by the ZeroMQ (ZMQ) middleware. Application maintains a broker, well known to the publishers and subscribers. This broker performs matchmaking. Data is disseminated from publishers to subscribers in a globally configurable way using one of the two approaches.
-1) Simulated "Flooding" - Publisher’s middleware layer directly send the data to the subscribers who are interested in the topic being published by this publisher. 
+ PUB/SUB model supported by the ZeroMQ (ZMQ) middleware. Application maintains a broker, well known to the publishers and subscribers. This broker performs matchmaking. Data is disseminated from publishers to subscribers in a globally configurable way using one of the two approaches.
 
-2) Centralized -  Publisher’s middleware sends information to the broker, which then sends on to the subscribers for this topic.
+> 1) Simulated "Flooding" - Publisher’s middleware layer directly send the data to the subscribers who are interested in the topic being published by this publisher. 
+
+> 2) Centralized -  Publisher’s middleware sends information to the broker, which then sends on to the subscribers for this topic.
 
 The latency is calculated in two ways - First with wireshark sniffing and a second way by utilizing timestamps for the publishers sent time and the subscriber's received time.  The plots of latency are generated with Matplotlib.
 
@@ -14,11 +15,18 @@ The main.py method can take an arugment of the number of pub/subs and whether to
 
 ## Built With
 - Ubuntu 20.04 (on VirtualBox)
-- Python3 
+- Python3
 - Mininet
-- ZeroMQ (zmq, pyzmq)
-- Wireshark, pyshark, tshark 
-- Matplotlib
+- ZeroMQ
+- Zookeeper
+- Wireshark
+- Python libraries:
+ - kazoo
+ - pyshark
+ - matplotlib
+ - pyzmq
+ - mininet
+ - netifaces
 
 **What you need to install on Ubuntu:**
 - mininet - http://mininet.org/download/
@@ -28,33 +36,59 @@ The main.py method can take an arugment of the number of pub/subs and whether to
 - zmq - sudo -H pip3 install pyzmq
 - matplotlib - sudo apt-get install python3-matplotlib
 
-## How to RUN 
-- Clone repo - https://github.com/rich-java-dev/cs6381-assignment1.git
-- Navigate to cs6381-assignment1 folder
+## SET-UP:
+- Clone repo - https://github.com/rich-java-dev/cs6381-assignment2.git
+- Navigate to cs6381-assignment2 folder
+- run **pip install -r requirements.txt**
+ - This will ensure all the of python packages used are installed.
+- run **sudo mn -c** between runs
+- run **ps -e | grep java** to get a list of pids for java apps to ensure zookeeper is not already running
+- run **sudo kill {pid}** to kill any existing java apps (We will deploy Zookeeper on a mininet host)
+
+
+## Running via main.py script
 - Run the following commands from main Ubuntu CLI (not any mininet xterm window)
---**replace x and y** with respective number of pub/subs to run 
 
-For centralized:
-- >sudo python3 main.py --pub_count=x --sub_count=y
-- >sudo python3 monitor.py --interface=any --sample_size=500 
+With Broker:
+ >sudo python3 main.py --zkpath='/path/to/zkserver/bin' --proxy_mode --pub_count=10
 
-For flooding: 
-- >sudo python3 main.py **--flood_mode**  --pub_count=x --sub_count=y
-- >sudo python3 monitor.py --interface=any --sample_size=500
+For flooding:
+ >sudo python3 main.py --zkpath='/path/to/zkserver/bin' --pub_count=10
 
-Running mininet and commands manually in xterm windows
+## **Running mininet and commands manually in xterm windows**
+ > sudo mn -x --topo=linear,10
+ > **host1**: /path/to/zookeeper/bin/zkServer.sh start
+ > **host2**: python3 proxy.py --zkserver={ip if not host1, else ommit}
+ > **host3**: python3 proxy.py --zkserver={ip if not host1, else ommit}
+ > **host4**: python3 proxy.py --zkserver={ip if not host1, else ommit}
+ > **host5**: python3 publisher.py --proxy --zkserver={ip if not host1, else ommit}
+ > **host6**: python3 subscriber.py --proxy --samples=10000 --zkserver={ip if not host1, else ommit}
+
+- Once the Subscriber begins receiving messages, kill host2
+- Host3 will be elected leader, and after a few seconds the subscriber will begin receiving connections via the new proxy
+- Kill Host3, and Host4 will be elected leader, same as described above.
 
 
 ## App Structure
+
+**proxy.py**
+usage: proxy.py --xin=5555 --xout=5556 --zkserver=10.0.0.1 [-h] [--xin XIN] [--xout XOUT] [--zkserver ZKSERVER]
+>optional arguments:
+  -h, --help            show this help message and exit
+  --xin XIN, --in_bound XIN
+  --xout XOUT, --out_bound XOUT
+  --zkserver ZKSERVER --zkintf
+
+
 **publisher.py**
 usage: publisher.py [-h] [--interface INTERFACE [INTERFACE ...]] [--port PORT]
-                    [--topic_range TOPIC_RANGE [TOPIC_RANGE ...]] [--bind] [--connect]
+                    [--topic TOPIC [TOPIC_RANGE ...]] [--bind] [--connect]
 
 >optional arguments:
   -h, --help            show this help message and exit
   --interface INTERFACE [INTERFACE ...], --proxy INTERFACE [INTERFACE ...], --device INTERFACE [INTERFACE ...]
   --port PORT
-  --topic_range TOPIC_RANGE [TOPIC_RANGE ...]
+  --topic TOPIC [TOPIC ...]
   --bind
   --connect
 
@@ -67,14 +101,9 @@ usage: subscriber.py [-h] [--interface INTERFACE [INTERFACE ...]] [--port PORT] 
   --topic TOPIC
   --net_size NET_SIZE
 
-**proxy.py**
-usage: proxy.py --xin=5555 --xout=5556 [-h] [--xin XIN] [--xout XOUT]
->optional arguments:
-  -h, --help            show this help message and exit
-  --xin XIN, --in_bound XIN
-  --xout XOUT, --out_bound XOUT
 
-**monitor.py** (pyshark api for monitoring TCP packets (TTDs)) - must be ran as root/sudo
+**monitor.py** 
+(pyshark api for monitoring TCP packets (TTDs)) - must be ran as root/sudo
 usage: monitor.py [-h] [--interface INTERFACE] [--net_size NET_SIZE]
                   [--sample_size SAMPLE_SIZE]
 >optional arguments:
@@ -83,7 +112,8 @@ usage: monitor.py [-h] [--interface INTERFACE] [--net_size NET_SIZE]
   --net_size NET_SIZE
   --sample_size SAMPLE_SIZE, --samples SAMPLE_SIZE
 
-**main.py** (driver for configuring network)
+**main.py** 
+(driver for configuring network)
 usage: main.py [-h] [--flood_mode FLOOD_MODE] [--xin XIN] [--xout XOUT] [--topic TOPIC] [--net_size NET_SIZE] [--pub_count PUB_COUNT]
                [--source_dir SOURCE_DIR]
 >optional arguments:
@@ -95,38 +125,3 @@ usage: main.py [-h] [--flood_mode FLOOD_MODE] [--xin XIN] [--xout XOUT] [--topic
   --net_size NET_SIZE
   --pub_count PUB_COUNT
   --source_dir SOURCE_DIR, --src_dir SOURCE_DIR
-
-**zutils.py** (api wrapper)
-We went with implementing callbacks vs. a more strict/formal OOP/class structure. The result is that both publishers and subscribers return a lambda which behaves as a 'thunk'.
-
-## Sample Network Configuration:
-
-**Automatic using main.py**:
--   sudo python3 main.py 
-
-    Run the monitor (not on mininet host):
--   sudo python3 monitor.py --interface=any --sample_size=500
-
-**Manual Configuration**
--   sudo mn -c
--   sudo mn -x --topo=linear,10
-
-Proxy/Broker: (in_bound, out_bound)
-
--   host1: python3 broker.py --xin=5555 --xout=5556
-
-Publishers: (bind|connect, interface, port, topic_range)
-
--   host2: python3 publisher.py --connect --interface=10.0.0.1 --port=5555 --topic_range 1 49999
--   host3: python3 publisher.py --connect --interface=10.0.0.1 --port=5555 --topic_range 50000 100000
-
-Subscribers: (interface, port, topic)
-
--   host4: python3 subscriber.py --interface=10.0.0.1 --port=5556 --topic=12345
--   host5: python3 subscriber.py --interface=10.0.0.1 --port=5556 --topic=90210
-
-Monitor: (interface ("s1-eth1",2,3...etc))
-
--   from localhost: sudo python3 monitor.py --interface=any --sample_size=500
-
- 
