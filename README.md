@@ -5,14 +5,15 @@
 
  PUB/SUB model supported by the ZeroMQ (ZMQ) middleware. Application maintains a broker, well known to the publishers and subscribers. This broker performs matchmaking. Data is disseminated from publishers to subscribers in a globally configurable way using one of the two approaches.
 
-> 1) Simulated "Flooding" - Publisher’s middleware layer directly send the data to the subscribers who are interested in the topic being published by this publisher. 
+## Simulated "Flooding" 
+- Publisher’s middleware layer directly send the data to the subscribers who are interested in the topic being published by this publisher. 
 - Look-up is now handled via Zookeeper, instead of a lame-broker of scanning the entire network. 
 - Look-up is done via a root znode "/topic", which contains children registered by the Publisher
 - The value stored at the given topic is the IP of the publisher which pushes data
 - eg: /topic/12345 -> 10.0.0.2
 - ie: topic '12345' is being published via host at IP 10.0.0.2
 
-> 2) Centralized 
+## Centralized 
 - Publisher’s middleware sends information to the broker, which then sends on to the subscribers for this topic.
 - Look-up of the broker is now handled via Zookeeper, instead of being required as an argument passed to the Pub/Subs
 - This now means that pubs and subs alike must know the server/host running Zookeeper
