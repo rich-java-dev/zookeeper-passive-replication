@@ -20,7 +20,8 @@ The main.py method can take an arugment of the number of pub/subs and whether to
 - ZeroMQ
 - Zookeeper
 - Wireshark
-- Python libraries:
+
+Python libraries:
  - kazoo
  - pyshark
  - matplotlib
@@ -50,7 +51,7 @@ The main.py method can take an arugment of the number of pub/subs and whether to
 - Run the following commands from main Ubuntu CLI (not any mininet xterm window)
 
 With Broker:
- >sudo python3 main.py --zkpath='/path/to/zkserver/bin' --proxy_mode --pub_count=10
+ >sudo python3 main.py --zkpath='/path/to/zkserver/bin' --pub_count=10 --proxy_mode
 
 For flooding:
  >sudo python3 main.py --zkpath='/path/to/zkserver/bin' --pub_count=10
@@ -72,35 +73,37 @@ For flooding:
 ## App Structure
 
 **proxy.py**
-usage: proxy.py --xin=5555 --xout=5556 --zkserver=10.0.0.1 [-h] [--xin XIN] [--xout XOUT] [--zkserver ZKSERVER]
+usage: proxy.py --xin=5555 --xout=5556 --zkserver=10.0.0.1 [-h] [--zkserver ZKSERVER] [--xin XIN] [--xout XOUT]
+
 >optional arguments:
   -h, --help            show this help message and exit
+  --zkserver ZKSERVER, --zkintf ZKSERVER
   --xin XIN, --in_bound XIN
   --xout XOUT, --out_bound XOUT
-  --zkserver ZKSERVER --zkintf
 
 
 **publisher.py**
-usage: publisher.py [-h] [--interface INTERFACE [INTERFACE ...]] [--port PORT]
-                    [--topic TOPIC [TOPIC_RANGE ...]] [--bind] [--connect]
+usage: publisher.py [-h] [--zkserver ZKSERVER] [--port PORT] [--topic TOPIC] [--proxy]
 
 >optional arguments:
   -h, --help            show this help message and exit
-  --interface INTERFACE [INTERFACE ...], --proxy INTERFACE [INTERFACE ...], --device INTERFACE [INTERFACE ...]
-  --port PORT
-  --topic TOPIC [TOPIC ...]
-  --bind
-  --connect
-
-**subscriber.py**
-usage: subscriber.py [-h] [--interface INTERFACE [INTERFACE ...]] [--port PORT] [--topic TOPIC] [--net_size NET_SIZE]
->optional arguments:
-  -h, --help            show this help message and exit
-  --interface INTERFACE [INTERFACE ...], --proxy INTERFACE [INTERFACE ...], --device INTERFACE [INTERFACE ...]
+  --zkserver ZKSERVER, --zkintf ZKSERVER
   --port PORT
   --topic TOPIC
-  --net_size NET_SIZE
+  --proxy
 
+**subscriber.py**
+usage: subscriber.py [-h] [--proxy] [--zkserver ZKSERVER] [--port PORT] [--topic TOPIC]
+                     [--sample_size SAMPLE_SIZE] [--label LABEL]
+
+>optional arguments:
+  -h, --help            show this help message and exit
+  --proxy
+  --zkserver ZKSERVER, --zkintf ZKSERVER
+  --port PORT
+  --topic TOPIC
+  --sample_size SAMPLE_SIZE, --samples SAMPLE_SIZE
+  --label LABEL
 
 **monitor.py** 
 (pyshark api for monitoring TCP packets (TTDs)) - must be ran as root/sudo
@@ -114,14 +117,15 @@ usage: monitor.py [-h] [--interface INTERFACE] [--net_size NET_SIZE]
 
 **main.py** 
 (driver for configuring network)
-usage: main.py [-h] [--flood_mode FLOOD_MODE] [--xin XIN] [--xout XOUT] [--topic TOPIC] [--net_size NET_SIZE] [--pub_count PUB_COUNT]
-               [--source_dir SOURCE_DIR]
+usage: main.py [-h] [--zkserver ZKSERVER] [--zkpath ZKPATH] [--proxy_mode] [--xin XIN] [--xout XOUT]
+               [--pub_count PUB_COUNT] [--proxy_count PROXY_COUNT]
+
 >optional arguments:
   -h, --help            show this help message and exit
-  --flood_mode FLOOD_MODE
+  --zkserver ZKSERVER, --zkintf ZKSERVER
+  --zkpath ZKPATH, --zk_bin_path ZKPATH
+  --proxy_mode
   --xin XIN
   --xout XOUT
-  --topic TOPIC
-  --net_size NET_SIZE
   --pub_count PUB_COUNT
-  --source_dir SOURCE_DIR, --src_dir SOURCE_DIR
+  --proxy_count PROXY_COUNT
