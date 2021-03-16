@@ -24,8 +24,20 @@ class Proxy():
         self.ip = get_ip()
         self.zk = start_kazoo_client(zkserver)
 
+
     def start(self):
         print(f"Proxy: {self.ip}")
+
+        if not self.zk.exists("/proxy-election"):
+            self.zk.create("/proxy-election")
+
+
+        print("Awaiting for Election Results")
+        election = self.zk.Election("/proxy-election",self.ip)
+        election.run(self.leader_elected)
+
+    def leader_elected(self):
+        print("Election Won - starting proxy")
 
         @self.zk.DataWatch(self.path)
         def proxy_watcher(data, stat):
@@ -48,6 +60,7 @@ class Proxy():
             f"Proxy started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")
 
         zmq.proxy(front_end, back_end)
+
 
 
 class Publisher():
