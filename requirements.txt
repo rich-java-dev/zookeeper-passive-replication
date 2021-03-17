@@ -1,7 +1,0 @@
-kazoo
-pyshark
-matplotlib
-pyzmq
-mininet
-netifaces
-

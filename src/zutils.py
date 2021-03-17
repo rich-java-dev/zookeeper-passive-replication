@@ -17,15 +17,26 @@ context = zmq.Context()
 
 class Proxy():
 
-    def __init__(self, in_bound=5555, out_bound=5556):
+    def __init__(self, zkserver="10.0.0.1", in_bound=5555, out_bound=5556):
         self.in_bound = in_bound
         self.out_bound = out_bound
         self.path = "/proxy"
+        self.election_path = "/proxy-election"
         self.ip = get_ip()
-        self.zk = start_kazoo_client()
+        self.zk = start_kazoo_client(zkserver)
 
     def start(self):
         print(f"Proxy: {self.ip}")
+
+        if not self.zk.exists(self.election_path):
+            self.zk.create(self.election_path)
+
+        print("Awaiting for Election Results")
+        election = self.zk.Election(self.election_path, self.ip)
+        election.run(self.leader_elected)
+
+    def leader_elected(self):
+        print("Election Won - starting proxy")
 
         @self.zk.DataWatch(self.path)
         def proxy_watcher(data, stat):
@@ -52,13 +63,13 @@ class Proxy():
 
 class Publisher():
 
-    def __init__(self, port=5555, topic=12345, proxy=True):
+    def __init__(self, port=5555, zkserver="10.0.0.1", topic=12345, proxy=True):
         self.port = port
         self.proxy = proxy
         self.topic = topic
         self.path = f"/topic/{topic}"
         self.proxy_path = "/proxy"
-        self.zk = start_kazoo_client()
+        self.zk = start_kazoo_client(zkserver)
         self.ip = get_ip()
         self.socket = context.socket(zmq.PUB)
 
@@ -120,7 +131,7 @@ class Publisher():
 
 class Subscriber():
 
-    def __init__(self, port=5556, topic='12345', proxy=True):
+    def __init__(self, port=5556, zkserver="10.0.0.1", topic='12345', proxy=True):
         self.port = port
         self.topic = topic
         self.proxy_path = "/proxy"
@@ -128,7 +139,7 @@ class Subscriber():
         self.proxy = proxy
         self.ip = get_ip()
         self.socket = context.socket(zmq.SUB)
-        self.zk = start_kazoo_client()
+        self.zk = start_kazoo_client(zkserver)
 
     def start(self):
         print(f"Subscriber: {self.ip}")
@@ -163,7 +174,7 @@ class Subscriber():
 
         # plot the time deltas
         fig, axs = plt.subplots(1)
-        axs.plot(range(len(data_set)), data_set, label)
+        axs.plot(range(len(data_set)), data_set)
         axs.set_title(
             f"RTTs '{label}' - topic '{self.topic}' - host '{self.ip}'")
         axs.set_ylabel("Delta Time (Pub - Sub)")
