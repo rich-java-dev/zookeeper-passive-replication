@@ -148,7 +148,7 @@ class Proxy():
             #set up comms between ensemble brokers to transfer state
             leader_ip = str(self.zk.get(self.leader_path)[0])
             self.replica_socket = self.context.socket(zmq.PULL)
-            self.replica_socket.connect(f"tcp://{leader_ip}:{self.replica_port}")
+            self.replica_socket.connect(f'tcp://{leader_ip}:{self.replica_port}')
             #TODO - set timeout if leader is down?
             
             self.replicate_data()
@@ -159,36 +159,31 @@ class Proxy():
             pass
         while True:
             msg = self.front_end_socket.recv_string()
-            message = msg.split('#')
+            message = msg.split(' ')
             msg_type = message[0]
+            pubid = message[1]
+            topic = message[2]
+            strength = message[3]
             if msg_type == 'register':
-                pubid = message[1]
-                topic = message[2]
-                self.update_data('add_pub', pubid, topic, '')
-
-            elif msg_type == 'publication':
-                pubid = message[1]
-                topic = message[2]
-                publication = message[3]
-                self.update_data('new_pub', pubid, topic, '')
-                self.update_data('new_publication', pubid, topic, publication)
-                self.syncsocket.send_string('add_publication' + '#' + pubid + '#' + topic + '#' + publication + '#')
-                if self.filter_pub_ownership(pubid, topic) is not None:
-                    print('sending to sub')
-                    publication = publication + '--' + str(time.time())
-                    self.back_end_socket.send_string(f'{topic} {publication}')
+                self.update_data('publisher', pubid, topic, strength, '')
+            elif msg_type == 'publish':
+                publication = message[4]
+                self.update_data('publication', pubid, topic, strength, publication)
+                
+            ##IM HERE
+            #reliable multicast PUSH/PULL on state transaction
+            self.replica_socket.send_string("TODO")
+            ##update replicate data too
 
 
-    def update_data(self, add_this, pubid, topic, publication):
+    def update_data(self, add_this, pubid, topic, strength, publication):
         try:
-            if add_this == 'new_publisher':
-                # Assign an ownership strength to the registered publisher
-                ownership_strength = random.randint(1, 100)
+            if add_this == 'publisher':
                 if topic not in self.pub_data.keys():
-                    self.pub_data.update({topic: {pubid: {'publications': [], 'strength': ownership_strength}}})
+                    self.pub_data.update({topic: {pubid: {'strength': strength, 'publications': []}}})
                 elif pubid not in self.pub_data[topic].keys():
-                    self.pub_data[topic].update({pubid: {'publications': [], 'strength': ownership_strength}})
-            elif add_this == 'new_publication':
+                    self.pub_data[topic].update({pubid: {'strength': strength, 'publications': []}})
+            elif add_this == 'publication':
                 stored_publication = publication + '--' + str(time.time())
                 self.pub_data[topic][pubid]['publications'].append(stored_publication)
         except KeyError as ex:
@@ -239,127 +234,6 @@ class Proxy():
         # else:
         #     print("Can I run start recursively?")
         #     # self.start()
-
-class Publisher():
-
-    def __init__(self, port=5555, zkserver="10.0.0.1", topic=12345, proxy=True):
-        self.port = port
-        self.proxy = proxy
-        self.topic = topic
-        self.path = f"/topic/{topic}"
-        self.proxy_path = "/proxy"
-        self.zk = start_kazoo_client(zkserver)
-        self.ip = get_ip()
-        self.socket = context.socket(zmq.PUB)
-
-    def start(self):
-        print(f"Publisher: {self.ip}")
-        self.init_monitor()
-
-        if not self.zk.exists("/topic"):
-            self.zk.create("/topic")
-
-        print(f'Publishing w/ proxy={self.proxy} and topic:{self.topic}')
-
-        if self.proxy:  # PROXY MODE
-
-            @self.zk.DataWatch(self.proxy_path)
-            def proxy_watcher(data, stat):
-                print(f"Publisher: proxy watcher triggered. data:{data}")
-                if data is not None:
-                    intf = data.decode('utf-8')
-                    conn_str = f'tcp://{intf}:{self.port}'
-                    print(f"connecting: {conn_str}")
-                    self.socket.connect(conn_str)
-
-        else:  # FLOOD MODE
-            conn_str = f'tcp://{self.ip}:{self.port}'
-            print(f"binding: {conn_str}")
-            self.socket.bind(conn_str)
-
-            print(f"Publisher: creating znode {self.path}:{self.ip}")
-            self.zk.create(self.path, value=self.ip.encode(
-                'utf-8'), ephemeral=True)
-
-        return lambda topic, msg: self.socket.send_string(f'{topic} {msg}')
-
-    def init_monitor(self):
-        evt_map = {}
-        for val in dir(zmq):
-            if val.startswith('EVENT_'):
-                key = getattr(zmq, val)
-                print("%21s : %4i" % (val, key))
-                evt_map[key] = val
-
-        def evt_monitor(monitor):
-            while monitor.poll():
-                evt = recv_monitor_message(monitor)
-                evt.update({'description': evt_map[evt['event']]})
-                #TODO - uncomment - old connection not dying
-                # print("Event: {}".format(evt))
-                if evt['event'] == zmq.EVENT_MONITOR_STOPPED:
-                    break
-            monitor.close()
-            print()
-            print('event monitor stopped.')
-
-        monitor = self.socket.get_monitor_socket()
-
-        t = threading.Thread(target=evt_monitor, args=(monitor,))
-        t.start()
-
-
-class Subscriber():
-
-    def __init__(self, port=5556, zkserver="10.0.0.1", topic='12345', proxy=True):
-        self.port = port
-        self.topic = topic
-        self.proxy_path = "/proxy"
-        self.path = f"/topic/{topic}"
-        self.proxy = proxy
-        self.ip = get_ip()
-        self.socket = context.socket(zmq.SUB)
-        self.zk = start_kazoo_client(zkserver)
-
-    def start(self):
-        print(f"Subscriber: {self.ip}")
-
-        if self.proxy:  # PROXY MODE
-
-            @self.zk.DataWatch(self.proxy_path)
-            def proxy_watcher(data, stat):
-                print(f"Subscriber: proxy watcher triggered. data:{data}")
-                if data is not None:
-                    intf = data.decode('utf-8')
-                    conn_str = f'tcp://{intf}:{self.port}'
-                    print(f"connecting: {conn_str}")
-                    self.socket.connect(conn_str)
-
-        else:  # FLOOD MODE
-
-            @self.zk.DataWatch(self.path)
-            def pub_watcher(data, stat):
-                print(f"Publisher: topic watcher triggered. data:{data}")
-                if data is not None:
-                    intf = data.decode('utf-8')
-                    conn_str = f'tcp://{intf}:{self.port}'
-                    print(f"connecting: {conn_str}")
-                    self.socket.connect(conn_str)
-
-        self.socket.setsockopt_string(zmq.SUBSCRIBE, self.topic)
-
-        return lambda: self.socket.recv_string()
-
-    def plot_data(self, data_set, label=""):
-
-        # plot the time deltas
-        fig, axs = plt.subplots(1)
-        axs.plot(range(len(data_set)), data_set)
-        axs.set_title(
-            f"RTTs '{label}' - topic '{self.topic}' - host '{self.ip}'")
-        axs.set_ylabel("Delta Time (Pub - Sub)")
-        axs.set_xlabel("Number of Samples")
-        plt.show()
 
 
 def get_ip():
