@@ -19,41 +19,61 @@ context = zmq.Context()
 class Proxy():
 
     def __init__(self, zkserver="10.0.0.1", in_bound=5555, out_bound=5556):
+        self.zk = start_kazoo_client(zkserver)
+        self.context = zmq.Context()
         self.in_bound = in_bound
         self.out_bound = out_bound
-        self.path = '/proxy'
+        self.leader_path = '/leader'
         self.elect_root_path = '/election'
         self.elect_candidate_path = '/election/candidate_sessionid_'
-        self.my_path = ""
         self.candidate_list = []
+        self.pub_root_path = '/publishers'
+        self.my_path = ""
         self.ip = get_ip()
-        self.zk = start_kazoo_client(zkserver)
         self.leader_node = None
         self.isleader = False
-        self.context = zmq.Context()
-        
-        #Create znode for each instance of this class
+        self.pub_data = {} #{topic: {pubid: {pub_values: [], strength: someval}}}
+        self.replica_socket = None # set up PUSH/PULL socket for state transfer
+        self.replica_port = "5557"
+        self.front_end_socket = None
+        self.back_end_socket = None
+
+        #Create Znode - CANDIDATES - /election/candidate_sessionid_n
         self.my_path = self.zk.create(self.elect_candidate_path, value=b'', sequence=True, ephemeral=True, makepath=True)
         print(f'Created Candidate ZNode: {self.my_path}')
         print(f'Candidate IP: {self.ip}\n')
 
         
-        #ensure that leader path exists
-        if self.zk.exists(self.path) is None:
-            self.zk.create(self.path, value=b'', ephemeral=True, makepath=True)
+        #Create Znode - LEADER - /leader
+        if self.zk.exists(self.leader_path) is None:
+            self.zk.create(self.leader_path, value=b'', ephemeral=True, makepath=True)
         
-        #get all children as candidates under '/election' parent
+        #Get and Sort candidate list
         self.candidate_list = self.zk.get_children(self.elect_root_path)
-        
-        #candidate list removes parent node (/election/) from name, not in seq order
+            #list absent of parent node (/election/) from name, not in seq order
         self.candidate_list.sort()
         print('#### Get Leader Candidate Nodes ####')
         print(f'Candidate ZNode List: {self.candidate_list}\n')
 
+        #Create Znode - PUBLISHERS - /publishers
+        if self.zk.exists(self.pub_root_path) is None:
+            self.zk.create(path=self.pub_root_path, value=b'', ephemeral=False, makepath=True)
+            
+        #Set publisher watch - to update pub_data dict on failure
+        @self.zk.ChildrenWatch(path=self.pub_root_path) #TODO - ensure znode parent for publishers
+        def watch_pubs(children):
+            self.pub_change(children)
+    
+    #Delete failed pubs from pub_data dict
+    def pub_change(self, children):
+        for topic in self.pub_data.keys():
+            for pubid in self.pub_data[topic].keys():
+                if pubid not in children:
+                    del self.pub_data[topic][pubid]
 
     def start(self):
         print('####  Determine Leader/Follower  ####')
-        #Current Znode is first in sequential candidate list and becomes LEADER
+        #Compare first sequential node with my IP - if same - set me to leader
         if self.my_path.endswith(self.candidate_list[0]):
             self.leader_node = self.my_path
             self.isleader = True
@@ -62,18 +82,31 @@ class Proxy():
             
             #set method requires byte string
             encoded_ip = self.ip.encode('utf-8')
-            self.zk.set('/proxy', encoded_ip)
+            self.zk.set(self.leader_path, encoded_ip)
             self.zk.set(self.my_path, encoded_ip)
             
             #Set up zmq proxy socket
-            front_end = self.context.socket(zmq.XSUB)
-            front_end.bind(f"tcp://*:{self.in_bound}")
-            back_end = self.context.socket(zmq.XPUB)
-            back_end.setsockopt(zmq.XPUB_VERBOSE, 1)
-            back_end.bind(f"tcp://*:{self.out_bound}")            
+            self.front_end_socket = self.context.socket(zmq.XSUB)
+            self.front_end_socket.bind(f"tcp://*:{self.in_bound}")
+            self.back_end_socket = self.context.socket(zmq.XPUB)
+            self.back_end_socket.setsockopt(zmq.XPUB_VERBOSE, 1)
+            self.back_end_socket.bind(f"tcp://*:{self.out_bound}")            
             print(
                 f"Node {self.my_path} is leader - started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")            
-            zmq.proxy(front_end, back_end)
+            
+            #Uncomment proxy to allow two kinds of comm types from pub
+            #zmq.proxy(self.front_end_socket, self.back_end_socket)
+           
+            #set up comms between ensemble brokers to transfer state
+            self.replica_socket = self.context.socket(zmq.PUSH)
+            self.replica_socket.bind(f"tcp://*:{self.replica_port}")
+        
+            #thread to continuously receive pub msgs
+            get_pub_msg_thread = threading.Thread(target=self.get_pub_msg, args=())
+            threading.Thread.setDaemon(get_pub_msg_thread, True)
+            get_pub_msg_thread.start()
+        
+        
         
         #Znodes exist earlier in candidate list - Current node becomes FOLLOWER
         else:
@@ -112,13 +145,82 @@ class Proxy():
             while self.isleader is False:
                 watch_prev_node(self.elect_root_path + "/" + prev_node_path)
 
+            #set up comms between ensemble brokers to transfer state
+            leader_ip = str(self.zk.get(self.leader_path)[0])
+            self.replica_socket = self.context.socket(zmq.PULL)
+            self.replica_socket.connect(f"tcp://{leader_ip}:{self.replica_port}")
+            #TODO - set timeout if leader is down?
+            
+            self.replicate_data()
+     
+        
+    def get_pub_msg(self):
+        while self.isLeader is False:
+            pass
+        while True:
+            msg = self.front_end_socket.recv_string()
+            message = msg.split('#')
+            msg_type = message[0]
+            if msg_type == 'register':
+                pubid = message[1]
+                topic = message[2]
+                self.update_data('add_pub', pubid, topic, '')
+
+            elif msg_type == 'publication':
+                pubid = message[1]
+                topic = message[2]
+                publication = message[3]
+                self.update_data('new_pub', pubid, topic, '')
+                self.update_data('new_publication', pubid, topic, publication)
+                self.syncsocket.send_string('add_publication' + '#' + pubid + '#' + topic + '#' + publication + '#')
+                if self.filter_pub_ownership(pubid, topic) is not None:
+                    print('sending to sub')
+                    publication = publication + '--' + str(time.time())
+                    self.back_end_socket.send_string(f'{topic} {publication}')
+
+
+    def update_data(self, add_this, pubid, topic, publication):
+        try:
+            if add_this == 'new_publisher':
+                # Assign an ownership strength to the registered publisher
+                ownership_strength = random.randint(1, 100)
+                if topic not in self.pub_data.keys():
+                    self.pub_data.update({topic: {pubid: {'publications': [], 'strength': ownership_strength}}})
+                elif pubid not in self.pub_data[topic].keys():
+                    self.pub_data[topic].update({pubid: {'publications': [], 'strength': ownership_strength}})
+            elif add_this == 'new_publication':
+                stored_publication = publication + '--' + str(time.time())
+                self.pub_data[topic][pubid]['publications'].append(stored_publication)
+        except KeyError as ex:
+            print(ex)
+
+    def replicate_data(self):
+        while self.leader is False:
+            try:
+                recv_pushed_pub_data = self.replica_socket.recv_string()
+            except Exception as e:
+                print(f'timeout error {e})
+                continue
+            msg = recv_pushed_pub_data.split('#')
+            msg_type = msg[0] #TODO - add types to publications
+            if msg_type == 'register':
+                pubid = msg[1]
+                topic = msg[2]
+                self.update_data(msg_type, pubid, topic, '')
+            elif msg_type == 'publication':
+                pubid = msg[1]
+                topic = msg[2]
+                pub_value = msg[3]
+                self.update_data('add_pub', pubid, topic, '')
+                self.update_data(msg_type, pubid, topic, pub_value)
+                
 
     def won_election(self): 
         print(f'New Leader Won Election: {self.my_path}')
         
         #check leader barrier node
-        if self.zk.exists(self.path) is None:
-            self.zk.create(self.path, value=self.ip.encode(
+        if self.zk.exists(self.leader_path) is None:
+            self.zk.create(self.leader_path, value=self.ip.encode(
                     'utf-8'), ephemeral=True, makepath=True)   
             print(f'New Leader IP: {self.ip}')
             
