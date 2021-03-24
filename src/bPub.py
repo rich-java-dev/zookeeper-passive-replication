@@ -35,7 +35,7 @@ class Publisher():
 
         if self.proxy:  # PROXY MODE
 
-            @self.zk.DataWatch(self.proxy_path)
+            @self.zk.DataWatch(self.leader_path)
             def proxy_watcher(data, stat):
                 print(f"Publisher: proxy watcher triggered. data:{data}")
                 if data is not None:
