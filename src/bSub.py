@@ -9,10 +9,10 @@ context = zmq.Context()
 
 class Subscriber():
 
-    def __init__(self, port=5556, zkserver="10.0.0.1", topic='12345', proxy=True):
+    def __init__(self, port=5556, zkserver="10.0.0.1", topic='92345', proxy=True):
         self.port = port
         self.topic = topic
-        self.proxy_path = "/proxy"
+        self.leader_path = "/leader"
         self.path = f"/topic/{topic}"
         self.proxy = proxy
         self.ip = get_ip()
@@ -24,7 +24,7 @@ class Subscriber():
 
         if self.proxy:  # PROXY MODE
 
-            @self.zk.DataWatch(self.proxy_path)
+            @self.zk.DataWatch(self.leader_path)
             def proxy_watcher(data, stat):
                 print(f"Subscriber: proxy watcher triggered. data:{data}")
                 if data is not None:

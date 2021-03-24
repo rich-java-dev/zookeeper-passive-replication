@@ -10,7 +10,7 @@ context = zmq.Context()
 
 class Publisher():
 
-    def __init__(self, port=5555, zkserver="10.0.0.1", topic=12345, proxy=True):
+    def __init__(self, port=5555, zkserver="10.0.0.1", topic=12349, proxy=True):
         self.port = port
         self.proxy = proxy
         self.topic = topic
@@ -20,6 +20,7 @@ class Publisher():
         self.leader_path = "/leader"
         self.zk = start_kazoo_client(zkserver)
         self.ip = get_ip()
+        self.leader_ip = None
         self.socket = context.socket(zmq.PUB)
         self.strength = randrange(1,11)
 
@@ -40,12 +41,15 @@ class Publisher():
                 print(f"Publisher: proxy watcher triggered. data:{data}")
                 if data is not None:
                     intf = data.decode('utf-8')
+                    self.leader_ip = intf
                     conn_str = f'tcp://{intf}:{self.port}'
                     print(f"connecting: {conn_str}")
                     self.socket.connect(conn_str)
-                    self.register_publisher()
-
-
+        
+        #self.register_publisher()
+        self.socket.send_string(f'register {self.pubid} {self.topic} {self.strength}')
+        print(f'intf: {self.leader_ip}')
+        print(f'bPub - register {self.pubid} {self.topic} {self.strength}')
         return lambda topic, msg: self.socket.send_string(f'publish {self.pubid} {topic} {self.strength} {msg}')
     
     def register_publisher(self):

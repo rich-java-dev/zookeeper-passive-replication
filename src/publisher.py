@@ -9,7 +9,7 @@ import uuid
 parser = argparse.ArgumentParser()
 parser.add_argument("--zkserver","--zkintf", default="10.0.0.1")
 parser.add_argument("--port", default="5555")
-parser.add_argument("--topic", default="12345")
+parser.add_argument("--topic", default="12349")
 parser.add_argument("--proxy", action="store_true", default=False)
 args = parser.parse_args()
 

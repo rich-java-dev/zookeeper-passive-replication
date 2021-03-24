@@ -58,14 +58,20 @@ class Proxy():
         #Create Znode - PUBLISHERS - /publishers
         if self.zk.exists(self.pub_root_path) is None:
             self.zk.create(path=self.pub_root_path, value=b'', ephemeral=False, makepath=True)
-            
+        
+        pub_list = self.zk.get_children(self.pub_root_path)
+        print('#### Get Publisher Nodes ####')
+        print(f'Publisher Znode List: {pub_list}\n')
+        
         #Set publisher watch - to update pub_data dict on failure
-        #@self.zk.ChildrenWatch(path=self.pub_root_path) #TODO - ensure znode parent for publishers
-        #def watch_pubs(children):
-        #    self.pub_change(children)
+        @self.zk.ChildrenWatch(path=self.pub_root_path) #TODO - ensure znode parent for publishers
+        def watch_pubs(children):
+            self.pub_change(children)
     
     #Delete failed pubs from pub_data dict
     def pub_change(self, children):
+        print('Publisher changes - either initial call, new, or failure')
+        print(f'pubdata: {self.pub_data}')
         for topic in self.pub_data.keys():
             for pubid in self.pub_data[topic].keys():
                 if pubid not in children:
@@ -95,6 +101,8 @@ class Proxy():
                 f"Node {self.my_path} is leader - started w/ in_bound={self.in_bound}, out_bound={self.out_bound}")            
             
             #Uncomment proxy to allow two kinds of comm types from pub
+    
+            #Proxy blocks    
             #zmq.proxy(self.front_end_socket, self.back_end_socket)
            
             #set up comms between ensemble brokers to transfer state
@@ -102,10 +110,11 @@ class Proxy():
             self.replica_socket.bind(f"tcp://*:{self.replica_port}")
         
             #thread to continuously receive pub msgs
-            get_pub_msg_thread = threading.Thread(target=self.get_pub_msg, args=())
-            threading.Thread.setDaemon(get_pub_msg_thread, True)
-            get_pub_msg_thread.start()
-        
+            #get_pub_msg_thread = threading.Thread(target=self.get_pub_msg, args=())
+            #threading.Thread.setDaemon(get_pub_msg_thread, True)
+            #get_pub_msg_thread.start()
+            self.get_pub_msg()
+                
         
         
         #Znodes exist earlier in candidate list - Current node becomes FOLLOWER
@@ -127,6 +136,7 @@ class Proxy():
                             election.run(self.won_election) # blocks until wins or canceled
                     else:
                         print("...leader exists")
+                        self.replicate_data()
                         #bootstap short poll - need something like expo backoff
                         time.sleep(1)
                         
@@ -141,28 +151,32 @@ class Proxy():
             prev_node = self.zk.exists(self.elect_root_path + "/" + prev_node_path, watch_prev_node)
             print(f'Watching first previous sequential node: {prev_node_path}')
             
-            #set watch on previous node
-            while self.isleader is False:
-                watch_prev_node(self.elect_root_path + "/" + prev_node_path)
-
             #set up comms between ensemble brokers to transfer state
             leader_ip = self.zk.get(self.leader_path)[0].decode('utf-8')
             print(f'leaderip: {leader_ip} and replicaport: {self.replica_port}')
             self.replica_socket = self.context.socket(zmq.PULL)
             self.replica_socket.connect(f'tcp://{leader_ip}:{self.replica_port}')
+            
+            #set watch on previous node
+            while self.isleader is False:
+                watch_prev_node(self.elect_root_path + "/" + prev_node_path)
+
             #TODO - set timeout if leader is down?
             
             self.replicate_data()
      
         
     def get_pub_msg(self):
-        print("Thread - getpubmsg - started")
+        print("getpubmsg func - started")
         #barrier until become leader
         while self.isleader is False:
             pass
         while True:
             print("getpubmsg while loop***")
+            #IM HERE and not getting a message
             msg = self.front_end_socket.recv_string()
+            print("Received message from pub")
+            print(msg)
             message = msg.split(' ')
             msg_type = message[0]
             pubid = message[1]
@@ -181,6 +195,7 @@ class Proxy():
 
 
     def update_data(self, add_this, pubid, topic, strength, publication):
+        print('###REACHED -UPDATE- DATA FUNC###')
         try:
             if add_this == 'publisher':
                 if topic not in self.pub_data.keys():
@@ -194,10 +209,13 @@ class Proxy():
             print(ex)
 
     def replicate_data(self):
+        print('###REACHED -REPLICATE- DATA FUNC###')
         #barrier - must be follower - may need to be update if replicated leaders
         while self.isleader is False:
             try:
+                #IM HERE - recv string is blocking and not getting message
                 recv_pushed_pub_data = self.replica_socket.recv_string()
+                print(f'received replica data from leader: {recv_pushed_pub_data}')
             except Exception as e:
                 print(f'timeout error {e}')
                 continue
