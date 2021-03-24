@@ -60,9 +60,9 @@ class Proxy():
             self.zk.create(path=self.pub_root_path, value=b'', ephemeral=False, makepath=True)
             
         #Set publisher watch - to update pub_data dict on failure
-        @self.zk.ChildrenWatch(path=self.pub_root_path) #TODO - ensure znode parent for publishers
-        def watch_pubs(children):
-            self.pub_change(children)
+        #@self.zk.ChildrenWatch(path=self.pub_root_path) #TODO - ensure znode parent for publishers
+        #def watch_pubs(children):
+        #    self.pub_change(children)
     
     #Delete failed pubs from pub_data dict
     def pub_change(self, children):
@@ -146,7 +146,8 @@ class Proxy():
                 watch_prev_node(self.elect_root_path + "/" + prev_node_path)
 
             #set up comms between ensemble brokers to transfer state
-            leader_ip = str(self.zk.get(self.leader_path)[0])
+            leader_ip = self.zk.get(self.leader_path)[0].decode('utf-8')
+            print(f'leaderip: {leader_ip} and replicaport: {self.replica_port}')
             self.replica_socket = self.context.socket(zmq.PULL)
             self.replica_socket.connect(f'tcp://{leader_ip}:{self.replica_port}')
             #TODO - set timeout if leader is down?
@@ -194,7 +195,7 @@ class Proxy():
 
     def replicate_data(self):
         #barrier - must be follower - may need to be update if replicated leaders
-        while self.leader is False:
+        while self.isleader is False:
             try:
                 recv_pushed_pub_data = self.replica_socket.recv_string()
             except Exception as e:
