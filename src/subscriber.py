@@ -1,7 +1,7 @@
 import sys
 import time
 import argparse
-from zutils_seq import Subscriber
+from bSub import Subscriber
 import datetime
 import uuid
 

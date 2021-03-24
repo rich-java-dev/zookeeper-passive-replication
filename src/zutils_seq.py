@@ -155,9 +155,12 @@ class Proxy():
      
         
     def get_pub_msg(self):
-        while self.isLeader is False:
+        print("Thread - getpubmsg - started")
+        #barrier until become leader
+        while self.isleader is False:
             pass
         while True:
+            print("getpubmsg while loop***")
             msg = self.front_end_socket.recv_string()
             message = msg.split(' ')
             msg_type = message[0]
@@ -170,9 +173,9 @@ class Proxy():
                 publication = message[4]
                 self.update_data('publication', pubid, topic, strength, publication)
                 
-            ##IM HERE
             #reliable multicast PUSH/PULL on state transaction
-            self.replica_socket.send_string("TODO")
+            #TODO - I'm just resending original message - is there a better way?
+            #self.replica_socket.send_string(msg)
             ##update replicate data too
 
 
@@ -190,24 +193,23 @@ class Proxy():
             print(ex)
 
     def replicate_data(self):
+        #barrier - must be follower - may need to be update if replicated leaders
         while self.leader is False:
             try:
                 recv_pushed_pub_data = self.replica_socket.recv_string()
             except Exception as e:
-                print(f'timeout error {e})
+                print(f'timeout error {e}')
                 continue
-            msg = recv_pushed_pub_data.split('#')
-            msg_type = msg[0] #TODO - add types to publications
+            message = recv_pushed_pub_data.split(' ')
+            msg_type = message[0]
+            pubid = message[1]
+            topic = message[2]
+            strength = message[3]
             if msg_type == 'register':
-                pubid = msg[1]
-                topic = msg[2]
-                self.update_data(msg_type, pubid, topic, '')
-            elif msg_type == 'publication':
-                pubid = msg[1]
-                topic = msg[2]
-                pub_value = msg[3]
-                self.update_data('add_pub', pubid, topic, '')
-                self.update_data(msg_type, pubid, topic, pub_value)
+                self.update_data('publisher', pubid, topic, strength, '')
+            elif msg_type == 'publish':
+                publication = message[4]
+                self.update_data('publication', pubid, topic, strength, publication)
                 
 
     def won_election(self): 
