@@ -1,5 +1,5 @@
-# Distributed Systems Principles - Assignment 2
-## Pub/Sub Distributed Message Queue with Leader Election/Zookeeper
+# Distributed Systems Tutorials
+## Pub/Sub Distributed Message Queue with Leader Election in Zookeeper - over Mininet/ZMQ
 ### Richard White, Max Coursey 
 
 
