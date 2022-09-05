@@ -33,12 +33,12 @@ The main.py method can take an arugment of the number of pub/subs and whether to
 - Wireshark
 
 Python libraries:
- - kazoo
- - pyshark
- - matplotlib
- - pyzmq
- - mininet
- - netifaces
+ - kazoo (Zookeeper Python API)
+ - pyshark (network/packet monitoring)
+ - matplotlib (graphical display)
+ - pyzmq (Zero Message Queue Python API)
+ - mininet (network namespace partioning/'data-centre mock env (not a simulator)')
+ - netifaces (network configuration/look-up (and debugging) API)
 
 **What you need to install on Ubuntu:**
 - mininet - http://mininet.org/download/
@@ -49,7 +49,7 @@ Python libraries:
 - matplotlib - sudo apt-get install python3-matplotlib
 
 ## SET-UP:
-- Clone repo - https://github.com/rich-java-dev/cs6381-assignment2.git
+- Clone repo - https://https://github.com/rich-java-dev/zookeeper-passive-replication.git
 - Navigate to cs6381-assignment2 folder
 - run **pip install -r requirements.txt**
  - This will ensure all the of python packages used are installed.
@@ -71,11 +71,16 @@ For flooding:
 >
  - sudo mn -x --topo=linear,10
  - **host1**: /path/to/zookeeper/bin/zkServer.sh start
- - **host2**: python3 proxy.py --zkserver={ip if not host1, else ommit}
- - **host3**: python3 proxy.py --zkserver={ip if not host1, else ommit}
- - **host4**: python3 proxy.py --zkserver={ip if not host1, else ommit}
- - **host5**: python3 publisher.py --proxy --zkserver={ip if not host1, else ommit}
- - **host6**: python3 subscriber.py --proxy --samples=10000 --zkserver={ip if not host1, else ommit}
+ - **host2**: 
+ >python3 proxy.py --zkserver={ip if not host1, else ommit}
+ - **host3**: 
+ >python3 proxy.py --zkserver={ip if not host1, else ommit}
+ - **host4**: 
+ >python3 proxy.py --zkserver={ip if not host1, else ommit}
+ - **host5**: 
+ >python3 publisher.py --proxy --zkserver={ip if not host1, else ommit}
+ - **host6**: 
+ >python3 subscriber.py --proxy --samples=10000 --zkserver={ip if not host1, else ommit}
 
 - Once the Subscriber begins receiving messages, kill host2
 - Host3 will be elected leader, and after a few seconds the subscriber will begin receiving connections via the new proxy
